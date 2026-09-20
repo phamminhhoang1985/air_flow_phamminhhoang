@@ -53,7 +53,7 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_NAME: ${MODEL_NAME:-breast-cancer-classifier}
-      PYTHONPATH: /home/airflow/.local/lib/python3.11/site-packages
+      PYTHONPATH: /opt/airflow:/home/airflow/.local/lib/python3.11/site-packages
       PATH: /home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
     user: "${AIRFLOW_UID:-0}:0"
     volumes:
@@ -76,14 +76,14 @@ services:
     image: ddm501-t03-airflow:2.8.4
     container_name: ddm501-t03-api
     entrypoint: []
-    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["bash", "-c", "pip uninstall -y email-validator 2>/dev/null || true; python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     ports:
       - "18011:8000"
     depends_on:
       mlflow:
         condition: service_healthy
     environment:
-      PYTHONPATH: /home/airflow/.local/lib/python3.11/site-packages
+      PYTHONPATH: /opt/airflow:/home/airflow/.local/lib/python3.11/site-packages
       PATH: /home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_NAME: ${MODEL_NAME:-breast-cancer-classifier}

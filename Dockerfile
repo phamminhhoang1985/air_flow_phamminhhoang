@@ -14,7 +14,8 @@ RUN pip install --no-cache-dir \
       "scikit-learn==1.6.0" \
       "fastapi==0.115.6" \
       "uvicorn==0.34.0" \
-      "pydantic==2.6.4"
+      "pydantic==2.6.4" && \
+    pip uninstall -y email-validator
 
 ENV PATH="/home/airflow/.local/bin:${PATH}" \
-    PYTHONPATH="/home/airflow/.local/lib/python3.11/site-packages:${PYTHONPATH}"
+    PYTHONPATH="/opt/airflow:/home/airflow/.local/lib/python3.11/site-packages:${PYTHONPATH}"
