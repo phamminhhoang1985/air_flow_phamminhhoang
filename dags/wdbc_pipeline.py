@@ -9,6 +9,8 @@ import hashlib
 import json
 import logging
 import os
+import time
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -140,6 +142,14 @@ def wdbc_pipeline():
     @task
     def train_and_register(validation: dict, scaling: dict, ds: str = None) -> dict:
         """Train a RandomForest model on scaled train data, log metrics, and register on MLflow Registry."""
+        # Wait up to 60 seconds for MLflow Tracking Server to be ready
+        for _ in range(12):
+            try:
+                urllib.request.urlopen(f"{MLFLOW_TRACKING_URI}/health", timeout=3)
+                break
+            except Exception:
+                time.sleep(5)
+
         train = pd.read_parquet(run_dir(ds) / "train.parquet")
         test = pd.read_parquet(run_dir(ds) / "test.parquet")
         numeric = [c for c in train.columns if c not in ("sample_id", "diagnosis")]

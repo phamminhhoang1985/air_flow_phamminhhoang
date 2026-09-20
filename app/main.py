@@ -19,16 +19,23 @@ model = None
 load_error: str | None = None
 
 
+def get_model():
+    """Lazily load or reload model from MLflow Registry if not yet loaded."""
+    global model, load_error
+    if model is None:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        try:
+            model = mlflow.sklearn.load_model(MODEL_URI)
+            load_error = None
+            print(f"Successfully loaded {MODEL_URI} from MLflow Registry")
+        except Exception as exc:
+            load_error = f"{type(exc).__name__}: {exc}"
+    return model
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global model, load_error
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    try:
-        model = mlflow.sklearn.load_model(MODEL_URI)
-        print(f"Successfully loaded {MODEL_URI} from MLflow Registry")
-    except Exception as exc:
-        model, load_error = None, f"{type(exc).__name__}: {exc}"
-        print(f"Could not load {MODEL_URI} -- {load_error}")
+    get_model()
     yield
 
 
@@ -41,7 +48,8 @@ class PredictRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    if model is None:
+    active_model = get_model()
+    if active_model is None:
         return {
             "status": "degraded",
             "model_loaded": False,
@@ -53,17 +61,18 @@ def health():
 
 @app.post("/predict")
 def predict(req: PredictRequest):
-    if model is None:
-        raise HTTPException(status_code=503, detail=f"{MODEL_URI} not loaded")
+    active_model = get_model()
+    if active_model is None:
+        raise HTTPException(status_code=503, detail=f"{MODEL_URI} not loaded: {load_error}")
     
     # Feature names validation & column alignment
-    columns = getattr(model, "feature_names_in_", None)
+    columns = getattr(active_model, "feature_names_in_", None)
     if columns is not None:
         row = pd.DataFrame([req.features], columns=columns)
     else:
         row = pd.DataFrame([req.features])
 
-    proba = float(model.predict_proba(row)[0][1])
+    proba = float(active_model.predict_proba(row)[0][1])
     return {
         "prediction": "benign" if proba >= 0.5 else "malignant",
         "probability_benign": round(proba, 4),
