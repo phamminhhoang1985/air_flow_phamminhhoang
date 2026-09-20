@@ -5,6 +5,7 @@ airflow-webserver.pid
 webserver_config.py
 standalone_admin_password.txt
 logs/
-data/staging/
+data/staging/*
+!data/staging/.gitkeep
 data/raw/*.orig
 .env

@@ -185,7 +185,8 @@ def wdbc_pipeline():
             )
             log.info("MLflow Run ID: %s, ROC AUC: %.4f", run.info.run_id, auc)
 
-        latest = mlflow.MlflowClient().get_registered_model(MODEL_NAME).latest_versions
+        client = mlflow.MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
+        latest = client.get_registered_model(MODEL_NAME).latest_versions
         version = max(int(v.version) for v in latest)
         log.info("Registered model '%s' version %d", MODEL_NAME, version)
 

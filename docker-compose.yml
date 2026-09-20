@@ -12,23 +12,28 @@ services:
     build: .
     image: ddm501-t03-airflow:2.8.4
     container_name: ddm501-t03-mlflow
-    command: ["mlflow", "server",
+    entrypoint: []
+    command: ["python", "-m", "mlflow", "server",
               "--backend-store-uri", "sqlite:////opt/airflow/data/mlflow.db",
               "--serve-artifacts",
-              "--artifacts-destination", "file:////opt/airflow/data/mlartifacts",
+              "--artifacts-destination", "file:///opt/airflow/data/mlartifacts",
               "--host", "0.0.0.0",
               "--port", "5000"]
     ports:
       - "15010:5000"
-    user: "0:0"
+    environment:
+      PYTHONPATH: /home/airflow/.local/lib/python3.11/site-packages
+      PATH: /home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
+    user: "${AIRFLOW_UID:-0}:0"
     volumes:
       - ./data:/opt/airflow/data
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')\" || exit 1"]
-      interval: 5s
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health').read()"]
+      interval: 10s
       timeout: 5s
       retries: 20
-      start_period: 10s
+      start_period: 15s
     restart: unless-stopped
 
   airflow:
@@ -48,6 +53,8 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_NAME: ${MODEL_NAME:-breast-cancer-classifier}
+      PYTHONPATH: /home/airflow/.local/lib/python3.11/site-packages
+      PATH: /home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
     user: "${AIRFLOW_UID:-0}:0"
     volumes:
       - ./dags:/opt/airflow/dags
@@ -56,7 +63,8 @@ services:
       - ./scripts:/opt/airflow/scripts
       - ./app:/opt/airflow/app
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health').read()"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -67,13 +75,16 @@ services:
     build: .
     image: ddm501-t03-airflow:2.8.4
     container_name: ddm501-t03-api
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    entrypoint: []
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "18011:8000"
     depends_on:
       mlflow:
         condition: service_healthy
     environment:
+      PYTHONPATH: /home/airflow/.local/lib/python3.11/site-packages
+      PATH: /home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_NAME: ${MODEL_NAME:-breast-cancer-classifier}
       MODEL_VERSION: ${MODEL_VERSION:-1}
@@ -81,4 +92,11 @@ services:
     volumes:
       - ./app:/opt/airflow/app
       - ./data:/opt/airflow/data
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
     restart: unless-stopped
