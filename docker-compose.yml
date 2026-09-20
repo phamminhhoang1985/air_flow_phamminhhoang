@@ -1,0 +1,85 @@
+# Tutorial 03 — Airflow + MLflow Registry + FastAPI Serving
+#
+#   docker compose up -d --build      # First time: builds image & starts all 3 services
+#   docker compose ps                 # Wait for STATUS = healthy
+#   docker compose exec airflow cat /opt/airflow/standalone_admin_password.txt
+#
+
+name: ddm501-t03
+
+services:
+  mlflow:
+    build: .
+    image: ddm501-t03-airflow:2.8.4
+    container_name: ddm501-t03-mlflow
+    command: ["mlflow", "server",
+              "--backend-store-uri", "sqlite:////opt/airflow/data/mlflow.db",
+              "--serve-artifacts",
+              "--artifacts-destination", "file:////opt/airflow/data/mlartifacts",
+              "--host", "0.0.0.0",
+              "--port", "5000"]
+    ports:
+      - "15010:5000"
+    user: "${AIRFLOW_UID:-0}:0"
+    volumes:
+      - ./data:/opt/airflow/data
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  airflow:
+    build: .
+    image: ddm501-t03-airflow:2.8.4
+    container_name: ddm501-t03-airflow
+    command: standalone
+    ports:
+      - "18080:8080"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: ${MODEL_NAME:-breast-cancer-classifier}
+    user: "${AIRFLOW_UID:-0}:0"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+      - ./logs:/opt/airflow/logs
+      - ./scripts:/opt/airflow/scripts
+      - ./app:/opt/airflow/app
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  api:
+    build: .
+    image: ddm501-t03-airflow:2.8.4
+    container_name: ddm501-t03-api
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "18011:8000"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: ${MODEL_NAME:-breast-cancer-classifier}
+      MODEL_VERSION: ${MODEL_VERSION:-1}
+    user: "${AIRFLOW_UID:-0}:0"
+    volumes:
+      - ./app:/opt/airflow/app
+      - ./data:/opt/airflow/data
+    restart: unless-stopped
