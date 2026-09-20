@@ -20,16 +20,15 @@ services:
               "--port", "5000"]
     ports:
       - "15010:5000"
-    user: "${AIRFLOW_UID:-0}:0"
+    user: "0:0"
     volumes:
       - ./data:/opt/airflow/data
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()"]
-      interval: 10s
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')\" || exit 1"]
+      interval: 5s
       timeout: 5s
-      retries: 12
-      start_period: 30s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
   airflow:
@@ -58,10 +57,10 @@ services:
       - ./app:/opt/airflow/app
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 15s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 20
-      start_period: 60s
+      start_period: 30s
     restart: unless-stopped
 
   api:
